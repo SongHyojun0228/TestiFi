@@ -2,26 +2,47 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    /* Earthy Tones 팔레트 기반 shadcn 변수 오버라이드 */
+    --background: 45 33% 96%;
+    --foreground: 15 10% 25%;
+
+    --card: 45 30% 98%;
+    --card-foreground: 15 10% 25%;
+
+    --popover: 45 30% 98%;
+    --popover-foreground: 15 10% 25%;
+
+    --primary: 95 25% 52%;
+    --primary-foreground: 45 33% 96%;
+
+    --secondary: 20 35% 68%;
+    --secondary-foreground: 15 10% 25%;
+
+    --accent: 350 30% 60%;
+    --accent-foreground: 45 33% 96%;
+
+    --muted: 50 25% 90%;
+    --muted-foreground: 15 10% 45%;
+
+    --destructive: 0 60% 50%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 40 20% 85%;
+    --input: 40 20% 85%;
+    --ring: 95 25% 52%;
+
+    --radius: 0.75rem;
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-}
+@layer base {
+  * {
+    @apply border-border;
+  }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
+  body {
+    @apply bg-background text-foreground;
   }
 }

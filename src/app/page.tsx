@@ -1,101 +1,96 @@
-import Image from "next/image";
+import { createSupabaseServer } from "@/lib/supabase/server";
+import type { TestRow } from "@/types/test";
+import TestCard from "@/components/TestCard";
+import { Separator } from "@/components/ui/separator";
 
-export default function Home() {
+/** 매 요청마다 최신 데이터 렌더링 */
+export const dynamic = "force-dynamic";
+
+/** 발행된 테스트 목록 조회 (최신순) */
+async function getPublishedTests() {
+  const supabase = createSupabaseServer();
+  const { data } = await supabase
+    .from("tests")
+    .select("slug, title, description, questions, completion_count, published_at")
+    .not("published_at", "is", null)
+    .order("published_at", { ascending: false });
+
+  return (data ?? []) as Pick<
+    TestRow,
+    "slug" | "title" | "description" | "questions" | "completion_count" | "published_at"
+  >[];
+}
+
+/** 발행일 기준 7일 이내인지 */
+function isNew(publishedAt: string | null): boolean {
+  if (!publishedAt) return false;
+  const diff = Date.now() - new Date(publishedAt).getTime();
+  return diff < 7 * 24 * 60 * 60 * 1000;
+}
+
+/** 첫 번째 질문의 이모지 추출 (없으면 기본값) */
+function getTestEmoji(questions: TestRow["questions"]): string {
+  if (Array.isArray(questions) && questions.length > 0 && questions[0].emoji) {
+    return questions[0].emoji;
+  }
+  return "🧪";
+}
+
+export default async function Home() {
+  const tests = await getPublishedTests();
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+    <main className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-8">
+      {/* 헤더 */}
+      <header className="mb-6 text-center">
+        <h1 className="text-2xl font-bold text-primary md:text-3xl">
+          TestiFi
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          너를 알아가는 가장 가벼운 방법
+        </p>
+      </header>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+      <Separator className="mb-6" />
+
+      {/* 테스트 목록 */}
+      {tests.length > 0 ? (
+        <section className="space-y-4">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            인기 테스트
+          </h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {tests.map((test) => (
+              <TestCard
+                key={test.slug}
+                slug={test.slug}
+                title={test.title}
+                description={test.description}
+                emoji={getTestEmoji(test.questions)}
+                completionCount={test.completion_count}
+                isNew={isNew(test.published_at)}
+              />
+            ))}
+          </div>
+        </section>
+      ) : (
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
+          <span className="text-4xl">🌿</span>
+          <p className="text-sm text-muted-foreground">
+            아직 준비된 테스트가 없어요.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            곧 재미있는 테스트가 올라올 거예요!
+          </p>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+      )}
+
+      {/* 푸터 */}
+      <footer className="mt-auto pt-8 text-center">
+        <p className="text-xs text-muted-foreground">
+          © 2026 TestiFi. 테스티피.
+        </p>
       </footer>
-    </div>
+    </main>
   );
 }
