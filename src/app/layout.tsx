@@ -4,11 +4,11 @@ import KakaoScript from "@/components/providers/KakaoScript";
 import Analytics from "@/components/providers/Analytics";
 import "./globals.css";
 
-const pretendard = localFont({
-  src: "../../public/fonts/PretendardVariable.woff2",
+const mainFont = localFont({
+  src: "../../public/fonts/Griun_PolFairness-Rg.woff2",
   display: "swap",
-  weight: "100 900",
-  variable: "--font-pretendard",
+  weight: "400",
+  variable: "--font-main",
 });
 
 export const metadata: Metadata = {
@@ -34,8 +34,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko" className={pretendard.variable}>
-      <body className="font-[family-name:var(--font-pretendard)] antialiased">
+    <html lang="ko" className={mainFont.variable}>
+      <body className="font-[family-name:var(--font-main)] antialiased">
         {children}
         <KakaoScript />
         <Analytics />

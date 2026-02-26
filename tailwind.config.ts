@@ -72,7 +72,7 @@ const config: Config = {
         error: "#C97070",
       },
       fontFamily: {
-        pretendard: ["var(--font-pretendard)", "sans-serif"],
+        main: ["var(--font-main)", "sans-serif"],
       },
       borderRadius: {
         lg: "var(--radius)",
