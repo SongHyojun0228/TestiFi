@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createSupabaseAdmin } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
 import { generateTest } from "@/lib/claude";
+
+/** API Route용 Supabase 어드민 클라이언트 (쿠키 불필요) */
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 /** Vercel Cron 또는 수동 호출용 테스트 자동생성 API */
 export async function POST(req: NextRequest) {
@@ -17,7 +25,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const supabase = createSupabaseAdmin();
+    const supabase = getAdminClient();
 
     /* 기존 테스트 slug 목록 조회 (중복 방지용) */
     const { data: existingTests } = await supabase

@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createSupabaseAdmin } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
+
+/** API Route용 Supabase 어드민 클라이언트 (쿠키 불필요) */
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 /** ADMIN_PASSWORD 검증 헬퍼 */
 function isAuthorized(req: NextRequest): boolean {
@@ -13,7 +21,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "인증 실패" }, { status: 401 });
   }
 
-  const supabase = createSupabaseAdmin();
+  const supabase = getAdminClient();
   const { data, error } = await supabase
     .from("tests")
     .select(
@@ -47,7 +55,7 @@ export async function PATCH(req: NextRequest) {
     );
   }
 
-  const supabase = createSupabaseAdmin();
+  const supabase = getAdminClient();
   const { error } = await supabase
     .from("tests")
     .update({ published_at: new Date().toISOString() })
@@ -79,7 +87,7 @@ export async function DELETE(req: NextRequest) {
     );
   }
 
-  const supabase = createSupabaseAdmin();
+  const supabase = getAdminClient();
   const { error } = await supabase.from("tests").delete().eq("id", id);
 
   if (error) {

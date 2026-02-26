@@ -23,7 +23,27 @@ function getSeasonContext(): string {
   return "겨울 (크리스마스, 연말결산, 새해계획, 겨울감성)";
 }
 
-/** Claude Sonnet API로 새 심리테스트 JSON 생성 */
+/** 응답 텍스트에서 JSON 추출 */
+function extractJson(text: string): string {
+  let str = text.trim();
+
+  /* 코드블록 제거 */
+  const codeBlock = str.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+  if (codeBlock) {
+    str = codeBlock[1].trim();
+  }
+
+  /* 첫 { 부터 마지막 } 까지 추출 */
+  const firstBrace = str.indexOf("{");
+  const lastBrace = str.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    str = str.slice(firstBrace, lastBrace + 1);
+  }
+
+  return str;
+}
+
+/** Claude Sonnet API로 새 심리테스트 JSON 생성 (실패 시 1회 재시도) */
 export async function generateTest(
   existingSlugs: string[]
 ): Promise<GeneratedTest> {
@@ -38,102 +58,73 @@ export async function generateTest(
     day: "numeric",
   });
 
-  const prompt = `너는 바이럴 심리테스트 전문 콘텐츠 크리에이터야.
-아래 규칙을 반드시 지켜서 새로운 심리테스트 JSON을 만들어줘.
+  const systemPrompt = `너는 바이럴 심리테스트 JSON 생성기야.
+반드시 유효한 JSON만 출력해. 마크다운, 코드블록, 설명 텍스트 절대 금지.
+JSON 문자열 안의 큰따옴표는 반드시 \\"로 이스케이프해.
+줄바꿈은 JSON 문자열 안에 넣지 마.`;
 
-## 오늘 날짜 & 시즌
-- 날짜: ${today}
-- 시즌: ${season}
-- 상시 인기 주제: 돈/연봉, 연애/궁합, MBTI 변형, 직장생활, 음식, 카페
+  const userPrompt = `새로운 심리테스트 JSON을 만들어줘.
 
-## 이미 존재하는 테스트 (중복 금지)
-${existingSlugs.length > 0 ? existingSlugs.map((s) => `- ${s}`).join("\n") : "- 없음"}
+## 오늘: ${today} / 시즌: ${season}
+## 상시 인기 주제: 돈/연봉, 연애/궁합, MBTI 변형, 직장생활, 음식, 카페
 
-## 바이럴 테스트 황금 공식
-1. 제목: "나의 _____ 유형은?" 또는 "2026 나의 _____ 테스트" 패턴
-2. 질문: 일상 상황 + 의외의 선택지. "당신은 ~한 편인가요?" 같은 직접 성격 질문 절대 금지.
-3. 유형명: 유머 + 공감 + 공유욕구. 이모지 필수.
-4. 결과 설명: "맞아 나 이런데!" 반응 유도. 긍정 80% + 약간의 찔림 20%.
-5. 궁합: 구체적이고 재미있게.
+## 기존 테스트 (중복 금지)
+${existingSlugs.length > 0 ? existingSlugs.join(", ") : "없음"}
 
-## 필수 규칙
-- 질문 6개, 선택지 3개씩
-- 결과 유형 6개
-- 자연스러운 한국어. 번역투 절대 금지.
-- 결과 description 150~200자
-- 결과 detailedAnalysis 400~500자
-- shareText는 카카오 공유용 한줄 (30자 내외)
-- slug는 영문 kebab-case
-- 질문 id는 1부터 순서대로 숫자
-- 선택지 id는 "q{질문번호}_{a|b|c}" 형식
-- 결과 유형 id는 "type_a" ~ "type_f"
-- scores에서 각 선택지는 높은 점수(3) 하나와 낮은 점수(1) 하나를 부여
-- compatibility의 best/worst는 다른 유형의 id
+## 규칙
+- 제목: "나의 _____ 유형은?" 패턴
+- 질문 6개, 선택지 3개씩 (일상 상황 시나리오, 직접 성격 질문 금지)
+- 결과 유형 6개 (유머+공감, 이모지 포함)
+- 결과 톤: 긍정 80% + 찔림 20%
+- description 150~200자, detailedAnalysis 400~500자
+- shareText 30자 내외
+- slug: 영문 kebab-case
+- 질문 id: 숫자 1~6
+- 선택지 id: "q{번호}_{a|b|c}"
+- 유형 id: "type_a"~"type_f"
+- scores: 높은 점수(3) 하나 + 낮은 점수(1) 하나
+- compatibility best/worst: 다른 유형 id
 
-## 출력 형식
-순수 JSON만 출력. 마크다운 코드블록이나 설명 없이 JSON만.
+## JSON 구조
+{"slug":"","title":"","description":"","questions":[{"id":1,"text":"","emoji":"","options":[{"id":"q1_a","text":"","scores":{"type_a":3,"type_b":1}}]}],"results":[{"id":"type_a","slug":"","title":"","emoji":"","description":"","detailedAnalysis":"","compatibility":{"best":"type_b","worst":"type_c"},"shareText":""}]}`;
 
-{
-  "slug": "영문-kebab-case",
-  "title": "테스트 제목",
-  "description": "한 줄 설명 30자 내외",
-  "questions": [
-    {
-      "id": 1,
-      "text": "질문 텍스트",
-      "emoji": "🎯",
-      "options": [
-        { "id": "q1_a", "text": "선택지 텍스트", "scores": { "type_a": 3, "type_b": 1 } },
-        { "id": "q1_b", "text": "선택지 텍스트", "scores": { "type_c": 3, "type_d": 1 } },
-        { "id": "q1_c", "text": "선택지 텍스트", "scores": { "type_e": 3, "type_f": 1 } }
-      ]
+  /* 최대 2회 시도 */
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const message = await client.messages.create({
+      model: "claude-sonnet-4-5-20250929",
+      max_tokens: 8192,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userPrompt }],
+    });
+
+    const textBlock = message.content.find((b) => b.type === "text");
+    if (!textBlock || textBlock.type !== "text") {
+      lastError = new Error("Claude API 응답에서 텍스트를 찾을 수 없습니다");
+      continue;
     }
-  ],
-  "results": [
-    {
-      "id": "type_a",
-      "slug": "result-slug",
-      "title": "유형 이름",
-      "emoji": "🔥",
-      "description": "무료 설명 150-200자",
-      "detailedAnalysis": "프리미엄 상세분석 400-500자",
-      "compatibility": { "best": "type_b", "worst": "type_c" },
-      "shareText": "카카오 공유용 한줄"
+
+    try {
+      const jsonStr = extractJson(textBlock.text);
+      const parsed = JSON.parse(jsonStr) as GeneratedTest;
+
+      /* 기본 유효성 검사 */
+      if (!parsed.slug || !parsed.title || !parsed.questions || !parsed.results) {
+        throw new Error("필수 필드 누락");
+      }
+      if (parsed.questions.length < 5 || parsed.questions.length > 10) {
+        throw new Error(`질문 수 범위 밖: ${parsed.questions.length}개`);
+      }
+      if (parsed.results.length < 4 || parsed.results.length > 8) {
+        throw new Error(`결과 유형 수 범위 밖: ${parsed.results.length}개`);
+      }
+
+      return parsed;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
     }
-  ]
-}`;
-
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-5-20250929",
-    max_tokens: 4096,
-    messages: [{ role: "user", content: prompt }],
-  });
-
-  /* 응답에서 텍스트 추출 */
-  const textBlock = message.content.find((block) => block.type === "text");
-  if (!textBlock || textBlock.type !== "text") {
-    throw new Error("Claude API 응답에서 텍스트를 찾을 수 없습니다");
   }
 
-  /* JSON 파싱 (코드블록 감싸져 있을 수도 있으므로 추출) */
-  let jsonStr = textBlock.text.trim();
-  const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (codeBlockMatch) {
-    jsonStr = codeBlockMatch[1].trim();
-  }
-
-  const parsed = JSON.parse(jsonStr) as GeneratedTest;
-
-  /* 기본 유효성 검사 */
-  if (!parsed.slug || !parsed.title || !parsed.questions || !parsed.results) {
-    throw new Error("생성된 테스트 JSON 구조가 올바르지 않습니다");
-  }
-  if (parsed.questions.length < 5 || parsed.questions.length > 10) {
-    throw new Error(`질문 수가 범위 밖: ${parsed.questions.length}개`);
-  }
-  if (parsed.results.length < 4 || parsed.results.length > 8) {
-    throw new Error(`결과 유형 수가 범위 밖: ${parsed.results.length}개`);
-  }
-
-  return parsed;
+  throw lastError ?? new Error("테스트 생성 실패");
 }

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Progress } from "@/components/ui/progress";
 import {
   Eye,
   Trash2,
@@ -12,6 +13,9 @@ import {
   LogIn,
   CheckCircle,
   BarChart3,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 /** 관리자용 테스트 요약 */
@@ -25,8 +29,20 @@ interface AdminTest {
   view_count: number;
   share_count: number;
   completion_count: number;
-  questions: { id: number }[];
-  results: { id: string; title: string }[];
+  questions: {
+    id: number;
+    text: string;
+    emoji?: string;
+    options: { id: string; text: string; scores: Record<string, number> }[];
+  }[];
+  results: {
+    id: string;
+    slug: string;
+    title: string;
+    emoji: string;
+    description: string;
+    compatibility: { best: string; worst: string };
+  }[];
 }
 
 /** 관리자 대시보드 */
@@ -182,9 +198,12 @@ export default function AdminPage() {
         </Button>
       </div>
 
-      {message && (
+      {message && !generating && (
         <p className="rounded-lg bg-muted px-4 py-2 text-sm">{message}</p>
       )}
+
+      {/* AI 생성 로딩 */}
+      {generating && <GeneratingOverlay />}
 
       {/* 통계 요약 */}
       <div className="grid grid-cols-3 gap-3">
@@ -270,6 +289,66 @@ function StatCard({
   );
 }
 
+/** AI 생성 로딩 오버레이 */
+function GeneratingOverlay() {
+  const [progress, setProgress] = useState(0);
+  const [step, setStep] = useState(0);
+
+  const steps = [
+    "트렌드 분석 중...",
+    "질문 생성 중...",
+    "결과 유형 작성 중...",
+    "궁합 매칭 중...",
+    "최종 검수 중...",
+  ];
+
+  useEffect(() => {
+    /* 프로그레스 바: 90%까지 점진적으로 */
+    const progressTimer = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 90) return 90;
+        return prev + Math.random() * 3 + 1;
+      });
+    }, 500);
+
+    /* 단계 텍스트: 3초마다 변경 */
+    const stepTimer = setInterval(() => {
+      setStep((prev) => (prev + 1) % steps.length);
+    }, 3000);
+
+    return () => {
+      clearInterval(progressTimer);
+      clearInterval(stepTimer);
+    };
+  }, [steps.length]);
+
+  return (
+    <Card className="border-primary/30 bg-primary/5">
+      <CardContent className="space-y-4 p-6">
+        <div className="flex items-center gap-3">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          <p className="font-semibold">AI 테스트 생성 중</p>
+        </div>
+        <Progress value={progress} className="h-2" />
+        <p className="text-sm text-muted-foreground">
+          {steps[step]}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          보통 10~20초 정도 걸립니다
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** 유형 id로 이름 찾기 헬퍼 */
+function getTypeName(
+  results: AdminTest["results"],
+  typeId: string
+): string {
+  return results.find((r) => r.id === typeId)?.title ?? typeId;
+}
+
 /** 관리자용 테스트 카드 */
 function TestAdminCard({
   test,
@@ -280,6 +359,7 @@ function TestAdminCard({
   onPublish?: () => void;
   onDelete: () => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const createdDate = new Date(test.created_at).toLocaleDateString("ko-KR");
 
   return (
@@ -315,6 +395,75 @@ function TestAdminCard({
             <span>👁️ {test.view_count}</span>
             <span>🔗 {test.share_count}</span>
             <span>✅ {test.completion_count}</span>
+          </div>
+        )}
+
+        {/* 상세 보기 토글 */}
+        <Button
+          size="sm"
+          variant="ghost"
+          className="w-full text-xs text-muted-foreground"
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? (
+            <ChevronUp className="mr-1 h-3 w-3" />
+          ) : (
+            <ChevronDown className="mr-1 h-3 w-3" />
+          )}
+          {expanded ? "접기" : "상세 보기"}
+        </Button>
+
+        {/* 상세 내용 */}
+        {expanded && (
+          <div className="space-y-4 border-t pt-3">
+            {/* 질문 목록 */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-primary">
+                질문 ({test.questions.length}개)
+              </p>
+              {test.questions.map((q) => (
+                <div
+                  key={q.id}
+                  className="rounded-md bg-muted/50 p-2 text-xs"
+                >
+                  <p className="font-medium">
+                    {q.emoji && `${q.emoji} `}Q{q.id}. {q.text}
+                  </p>
+                  <ul className="mt-1 space-y-0.5 pl-4">
+                    {q.options.map((o) => (
+                      <li key={o.id} className="text-muted-foreground">
+                        {o.id}: {o.text}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+
+            {/* 결과 유형 목록 */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-accent">
+                결과 유형 ({test.results.length}개)
+              </p>
+              {test.results.map((r) => (
+                <div
+                  key={r.id}
+                  className="rounded-md bg-accent/5 p-2 text-xs"
+                >
+                  <p className="font-medium">
+                    {r.emoji} {r.title}
+                  </p>
+                  <p className="mt-0.5 text-muted-foreground">
+                    {r.description}
+                  </p>
+                  <p className="mt-0.5 text-muted-foreground">
+                    찰떡궁합: {getTypeName(test.results, r.compatibility.best)}
+                    {" / "}
+                    상극: {getTypeName(test.results, r.compatibility.worst)}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
